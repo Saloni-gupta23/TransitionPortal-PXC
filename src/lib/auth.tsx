@@ -1,63 +1,97 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { USERS, type Role, type User } from "@/data/mock";
+/**
+ * lib/auth.tsx
+ *
+ * Drop-in replacement for the mock auth.
+ * Now calls the real backend via authService.
+ *
+ * What changed vs the mock version:
+ *  - login() now takes email + password and hits /api/auth/login
+ *  - logout() calls /api/auth/logout then clears the token
+ *  - On mount, verifies the stored token is still valid via /api/auth/me
+ *  - switchRole() is REMOVED — not for production
+ *  - canEdit() and visibleSSCFilter() remain unchanged
+ */
+
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
+import * as authService from "@/services/authService";
+import { getToken } from "@/services/apiClient";
+import type { Role, User } from "@/data/mock";
 
 interface AuthCtx {
   user: User | null;
-  login: (email: string) => void;
-  logout: () => void;
-  switchRole: (role: Role) => void;
+  isLoading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
 const Ctx = createContext<AuthCtx | null>(null);
 
-const STORAGE_KEY = "pc.session.userId";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
+  // On mount: if a token exists, verify it and restore the session
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    const id = localStorage.getItem(STORAGE_KEY);
-    if (id) {
-      const u = USERS.find((x) => x.id === id);
-      if (u) setUser(u);
+    const token = getToken();
+    if (!token) {
+      setIsLoading(false);
+      return;
     }
+
+    authService
+      .getMe()
+      .then((u) => setUser(u))
+      .catch(() => {
+        // Token invalid or expired — let the apiClient's 401 handler redirect
+        setUser(null);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const login = (email: string) => {
-    const u = USERS.find((x) => x.email.toLowerCase() === email.toLowerCase()) ?? USERS[3];
+  const login = async (email: string, password: string) => {
+    const u = await authService.login(email, password);
     setUser(u);
-    localStorage.setItem(STORAGE_KEY, u.id);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await authService.logout();
     setUser(null);
-    localStorage.removeItem(STORAGE_KEY);
   };
 
-  const switchRole = (role: Role) => {
-    const u = USERS.find((x) => x.role === role);
-    if (u) {
-      setUser(u);
-      localStorage.setItem(STORAGE_KEY, u.id);
-    }
-  };
-
-  return <Ctx.Provider value={{ user, login, logout, switchRole }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ user, isLoading, login, logout }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export function useAuth() {
   const v = useContext(Ctx);
-  if (!v) throw new Error("AuthProvider missing");
+  if (!v) throw new Error("useAuth must be used inside AuthProvider");
   return v;
 }
 
 export function canEdit(role: Role | undefined): boolean {
   if (!role) return false;
-  return ["TRANSITION_OWNER", "TRANSITION_SUPPORT", "TSSC_LEAD", "CSSC_LEAD", "ITSSC_LEAD", "SSC_HEAD"].includes(role);
+  return [
+    "TRANSITION_OWNER",
+    "TRANSITION_SUPPORT",
+    "TSSC_LEAD",
+    "CSSC_LEAD",
+    "ITSSC_LEAD",
+    "SSC_HEAD",
+  ].includes(role);
 }
 
-export function visibleSSCFilter(role: Role | undefined): "ALL" | "TSSC" | "CSSC" | "ITSSC" {
+export function visibleSSCFilter(
+  role: Role | undefined
+): "ALL" | "TSSC" | "CSSC" | "ITSSC" {
   if (role === "TSSC_LEAD") return "TSSC";
   if (role === "CSSC_LEAD") return "CSSC";
   if (role === "ITSSC_LEAD") return "ITSSC";
