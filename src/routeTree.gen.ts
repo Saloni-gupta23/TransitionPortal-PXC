@@ -23,6 +23,7 @@ import { Route as AppAuditRouteImport } from './routes/_app.audit'
 import { Route as AppProjectsIndexRouteImport } from './routes/_app.projects.index'
 import { Route as AppProjectsNewRouteImport } from './routes/_app.projects.new'
 import { Route as AppProjectsIdRouteImport } from './routes/_app.projects.$id'
+import { Route as AppProjectsIdDoiStageRouteImport } from './routes/_app.projects.$id.doi.$stage'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -93,6 +94,11 @@ const AppProjectsIdRoute = AppProjectsIdRouteImport.update({
   path: '/projects/$id',
   getParentRoute: () => AppRoute,
 } as any)
+const AppProjectsIdDoiStageRoute = AppProjectsIdDoiStageRouteImport.update({
+  id: '/doi/$stage',
+  path: '/doi/$stage',
+  getParentRoute: () => AppProjectsIdRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -105,9 +111,10 @@ export interface FileRoutesByFullPath {
   '/risks': typeof AppRisksRoute
   '/settings': typeof AppSettingsRoute
   '/users': typeof AppUsersRoute
-  '/projects/$id': typeof AppProjectsIdRoute
+  '/projects/$id': typeof AppProjectsIdRouteWithChildren
   '/projects/new': typeof AppProjectsNewRoute
   '/projects/': typeof AppProjectsIndexRoute
+  '/projects/$id/doi/$stage': typeof AppProjectsIdDoiStageRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -120,9 +127,10 @@ export interface FileRoutesByTo {
   '/risks': typeof AppRisksRoute
   '/settings': typeof AppSettingsRoute
   '/users': typeof AppUsersRoute
-  '/projects/$id': typeof AppProjectsIdRoute
+  '/projects/$id': typeof AppProjectsIdRouteWithChildren
   '/projects/new': typeof AppProjectsNewRoute
   '/projects': typeof AppProjectsIndexRoute
+  '/projects/$id/doi/$stage': typeof AppProjectsIdDoiStageRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -137,9 +145,10 @@ export interface FileRoutesById {
   '/_app/risks': typeof AppRisksRoute
   '/_app/settings': typeof AppSettingsRoute
   '/_app/users': typeof AppUsersRoute
-  '/_app/projects/$id': typeof AppProjectsIdRoute
+  '/_app/projects/$id': typeof AppProjectsIdRouteWithChildren
   '/_app/projects/new': typeof AppProjectsNewRoute
   '/_app/projects/': typeof AppProjectsIndexRoute
+  '/_app/projects/$id/doi/$stage': typeof AppProjectsIdDoiStageRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -157,6 +166,7 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/projects/new'
     | '/projects/'
+    | '/projects/$id/doi/$stage'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | '/projects/$id'
     | '/projects/new'
     | '/projects'
+    | '/projects/$id/doi/$stage'
   id:
     | '__root__'
     | '/'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/_app/projects/$id'
     | '/_app/projects/new'
     | '/_app/projects/'
+    | '/_app/projects/$id/doi/$stage'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -296,8 +308,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppProjectsIdRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/projects/$id/doi/$stage': {
+      id: '/_app/projects/$id/doi/$stage'
+      path: '/doi/$stage'
+      fullPath: '/projects/$id/doi/$stage'
+      preLoaderRoute: typeof AppProjectsIdDoiStageRouteImport
+      parentRoute: typeof AppProjectsIdRoute
+    }
   }
 }
+
+interface AppProjectsIdRouteChildren {
+  AppProjectsIdDoiStageRoute: typeof AppProjectsIdDoiStageRoute
+}
+
+const AppProjectsIdRouteChildren: AppProjectsIdRouteChildren = {
+  AppProjectsIdDoiStageRoute: AppProjectsIdDoiStageRoute,
+}
+
+const AppProjectsIdRouteWithChildren = AppProjectsIdRoute._addFileChildren(
+  AppProjectsIdRouteChildren,
+)
 
 interface AppRouteChildren {
   AppAuditRoute: typeof AppAuditRoute
@@ -308,7 +339,7 @@ interface AppRouteChildren {
   AppRisksRoute: typeof AppRisksRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppUsersRoute: typeof AppUsersRoute
-  AppProjectsIdRoute: typeof AppProjectsIdRoute
+  AppProjectsIdRoute: typeof AppProjectsIdRouteWithChildren
   AppProjectsNewRoute: typeof AppProjectsNewRoute
   AppProjectsIndexRoute: typeof AppProjectsIndexRoute
 }
@@ -322,7 +353,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppRisksRoute: AppRisksRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppUsersRoute: AppUsersRoute,
-  AppProjectsIdRoute: AppProjectsIdRoute,
+  AppProjectsIdRoute: AppProjectsIdRouteWithChildren,
   AppProjectsNewRoute: AppProjectsNewRoute,
   AppProjectsIndexRoute: AppProjectsIndexRoute,
 }

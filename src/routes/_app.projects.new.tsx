@@ -1,83 +1,332 @@
+/**
+ * routes/_app.projects.new.tsx
+ *
+ * Create Transition — 5-step wizard.
+ *
+ * Steps:
+ *  0 – Service Details   (unit, vertical, service area, job position, SSC type)
+ *  1 – Capacity & Dates  (FTE, capacity type, dates, status, RAG)
+ *  2 – DOI Plan          (per-stage start/end dates)
+ *  3 – Team              (responsible SSC + HQ)
+ *  4 – Review & Create
+ *
+ * The route is intentionally thin: it owns state and navigation only.
+ * All UI is delegated to the components under components/create-transition/.
+ */
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Plus } from "lucide-react";
+
 import { Button, Card, CardHeader } from "@/components/ui-kit";
 import { PageHeader } from "@/components/AppLayout";
+import { StepIndicator } from "@/components/create-transition/StepIndicator";
+import { DOIPlanner } from "@/components/create-transition/DOIPlanner";
+import type { DOIPlan } from "@/components/create-transition/DOIPlanner";
+import { ReviewSummary } from "@/components/create-transition/ReviewSummary";
+import {
+  Field,
+  TextInput,
+  SelectInput,
+  Textarea,
+} from "@/components/create-transition/TransitionFormFields";
+import {
+  BUSINESS_UNITS,
+  VERTICALS,
+  SSC_TYPES,
+  CAPACITY_TYPES,
+  RESPONSIBLE_SSC_MEMBERS,
+  RESPONSIBLE_HQ_MEMBERS,
+  OVERALL_STATUSES,
+  RAG_OPTIONS,
+} from "@/data/transitionData";
 
 export const Route = createFileRoute("/_app/projects/new")({
   component: NewProject,
 });
 
-const STEPS = ["Service", "Capacity & Dates", "Team", "Review"];
+/* ── Form shape ─────────────────────────────────────────────────────────── */
+export interface NewTransitionForm {
+  // Step 0 – Service
+  unit: string;
+  vertical: string;
+  serviceArea: string;
+  jobPosition: string;
+  sscType: string;
+  // Step 1 – Capacity & Dates
+  requiredFTE: number;
+  capacityType: string;
+  plannedStart: string;
+  cutoverDate: string;
+  hypercareStart: string;
+  hypercareEnd: string;
+  overallStatus: string;
+  rag: string;
+  // Step 2 – DOI Plan
+  doiPlan: DOIPlan;
+  // Step 3 – Team
+  responsibleSSC: string;
+  responsibleHQ: string;
+}
 
+const EMPTY_FORM: NewTransitionForm = {
+  unit: "",
+  vertical: "",
+  serviceArea: "",
+  jobPosition: "",
+  sscType: "",
+  requiredFTE: 1,
+  capacityType: "",
+  plannedStart: "",
+  cutoverDate: "",
+  hypercareStart: "",
+  hypercareEnd: "",
+  overallStatus: "Yet to Start",
+  rag: "Green",
+  doiPlan: {},
+  responsibleSSC: "",
+  responsibleHQ: "",
+};
+
+/* ── Component ──────────────────────────────────────────────────────────── */
 function NewProject() {
   const nav = useNavigate();
   const [step, setStep] = useState(0);
+  const [form, setForm] = useState<NewTransitionForm>(EMPTY_FORM);
+
+  const set = <K extends keyof NewTransitionForm>(
+    key: K,
+    val: NewTransitionForm[K]
+  ) => setForm((f) => ({ ...f, [key]: val }));
+
+  const next = () => setStep((s) => Math.min(s + 1, 4));
+  const prev = () => setStep((s) => Math.max(s - 1, 0));
+
+  const handleCreate = () => {
+    // In a real app: call projectService.createProject(form) here
+    nav({ to: "/projects" });
+  };
 
   return (
-    <div>
-      <PageHeader title="Create Transition Project" subtitle="Capture the essential information to onboard a new SSC India transition" />
+    <div className="space-y-6 animate-fade-in">
+      <PageHeader
+        title="Create Transition"
+        subtitle="Capture the essential information to onboard a new SSC India transition"
+      />
 
-      <div className="mb-6 flex items-center gap-2">
-        {STEPS.map((s, i) => (
-          <div key={s} className="flex flex-1 items-center gap-2">
-            <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${i < step ? "bg-rag-green text-white" : i === step ? "bg-brand text-brand-foreground" : "bg-muted text-muted-foreground"}`}>
-              {i < step ? <Check className="h-4 w-4" /> : i + 1}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className={`truncate text-sm font-medium ${i === step ? "" : "text-muted-foreground"}`}>{s}</div>
-              {i < STEPS.length - 1 && <div className="mt-2 h-px w-full bg-border" />}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Step indicator */}
+      <StepIndicator current={step} />
 
       <Card>
-        <CardHeader title={STEPS[step]} />
-        <div className="grid gap-4 p-5 md:grid-cols-2">
+        {/* Step content */}
+        <div className="p-6 space-y-4">
+          {/* ── Step 0: Service Details ── */}
           {step === 0 && (
             <>
-              <Field label="Unit"><select className={INPUT}><option>PxC DE</option><option>PxC USA</option><option>PxC FR</option><option>PxC IT</option></select></Field>
-              <Field label="Vertical"><select className={INPUT}><option>Finance</option><option>IT</option><option>Engineering</option><option>HR</option><option>Procurement</option></select></Field>
-              <Field label="Service Area"><input className={INPUT} placeholder="e.g., Accounts Payable" /></Field>
-              <Field label="Job Position"><input className={INPUT} placeholder="e.g., AP Specialist" /></Field>
-              <Field label="SSC Type"><select className={INPUT}><option>TSSC</option><option>CSSC</option><option>ITSSC</option></select></Field>
-              <Field label="Required FTE"><input type="number" min={1} defaultValue={3} className={INPUT} /></Field>
+              <SectionTitle>Service Details</SectionTitle>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Business Unit" required>
+                  <SelectInput
+                    value={form.unit}
+                    onChange={(v) => set("unit", v)}
+                    options={BUSINESS_UNITS}
+                    placeholder="Select unit"
+                  />
+                </Field>
+
+                <Field label="Vertical" required>
+                  <SelectInput
+                    value={form.vertical}
+                    onChange={(v) => set("vertical", v)}
+                    options={VERTICALS}
+                    placeholder="Select vertical"
+                  />
+                </Field>
+
+                <Field label="Service Area" required>
+                  <TextInput
+                    value={form.serviceArea}
+                    onChange={(v) => set("serviceArea", v)}
+                    placeholder="e.g., Accounts Payable"
+                  />
+                </Field>
+
+                <Field label="Job Position / Service Profile" required>
+                  <TextInput
+                    value={form.jobPosition}
+                    onChange={(v) => set("jobPosition", v)}
+                    placeholder="e.g., AP Specialist"
+                  />
+                </Field>
+
+                <Field label="SSC Type" required>
+                  <SelectInput
+                    value={form.sscType}
+                    onChange={(v) => set("sscType", v)}
+                    options={SSC_TYPES}
+                    placeholder="Select SSC type"
+                  />
+                </Field>
+              </div>
             </>
           )}
+
+          {/* ── Step 1: Capacity & Dates ── */}
           {step === 1 && (
             <>
-              <Field label="Capacity Type"><select className={INPUT}><option>New Capacity</option><option>Relocation from HQ</option><option>Ramp-up</option><option>Replacement</option></select></Field>
-              <Field label="Planned Start at SSC"><input type="date" className={INPUT} /></Field>
-              <Field label="Cutover Date"><input type="date" className={INPUT} /></Field>
-              <Field label="Hypercare Start"><input type="date" className={INPUT} /></Field>
-              <Field label="Hypercare End"><input type="date" className={INPUT} /></Field>
-              <Field label="Initial Risks / Dependencies" full><textarea rows={3} className={INPUT} placeholder="List initial risks, dependencies or assumptions" /></Field>
+              <SectionTitle>Capacity & Dates</SectionTitle>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Capacity Type" required>
+                  <SelectInput
+                    value={form.capacityType}
+                    onChange={(v) => set("capacityType", v)}
+                    options={CAPACITY_TYPES}
+                    placeholder="Select type"
+                  />
+                </Field>
+
+                <Field
+                  label="Required FTE"
+                  required
+                  hint="Full-time equivalents needed"
+                >
+                  <TextInput
+                    type="number"
+                    value={form.requiredFTE}
+                    onChange={(v) => set("requiredFTE", Number(v))}
+                    min={0.5}
+                    step={0.5}
+                    placeholder="e.g. 3"
+                  />
+                </Field>
+
+                <Field label="Planned Start at SSC" required>
+                  <TextInput
+                    type="date"
+                    value={form.plannedStart}
+                    onChange={(v) => set("plannedStart", v)}
+                  />
+                </Field>
+
+                <Field label="Cutover Date" required>
+                  <TextInput
+                    type="date"
+                    value={form.cutoverDate}
+                    onChange={(v) => set("cutoverDate", v)}
+                    min={form.plannedStart}
+                  />
+                </Field>
+
+                <Field label="Hypercare Start">
+                  <TextInput
+                    type="date"
+                    value={form.hypercareStart}
+                    onChange={(v) => set("hypercareStart", v)}
+                    min={form.cutoverDate}
+                  />
+                </Field>
+
+                <Field label="Hypercare End">
+                  <TextInput
+                    type="date"
+                    value={form.hypercareEnd}
+                    onChange={(v) => set("hypercareEnd", v)}
+                    min={form.hypercareStart}
+                  />
+                </Field>
+
+                <Field label="Overall Status">
+                  <SelectInput
+                    value={form.overallStatus}
+                    onChange={(v) => set("overallStatus", v)}
+                    options={OVERALL_STATUSES}
+                  />
+                </Field>
+
+                <Field label="RAG">
+                  <SelectInput
+                    value={form.rag}
+                    onChange={(v) => set("rag", v)}
+                    options={RAG_OPTIONS}
+                  />
+                </Field>
+              </div>
             </>
           )}
+
+          {/* ── Step 2: DOI Plan ── */}
           {step === 2 && (
             <>
-              <Field label="Responsible SSC (India)"><input className={INPUT} defaultValue="Anis Mohanty" /></Field>
-              <Field label="Responsible HQ"><input className={INPUT} placeholder="Stakeholder at HQ" /></Field>
-              <Field label="Transition Owner"><input className={INPUT} defaultValue="Anis Mohanty" /></Field>
-              <Field label="Transition Support"><input className={INPUT} defaultValue="Susanta Behra" /></Field>
+              <SectionTitle>DOI Stage Plan</SectionTitle>
+              <p className="text-sm text-muted-foreground -mt-2 mb-2">
+                Set the planned start and end date for each of the 5 DOI stages.
+                These can be updated later from the project detail page.
+              </p>
+              <DOIPlanner
+                plan={form.doiPlan}
+                onChange={(plan) => set("doiPlan", plan)}
+                projectStart={form.plannedStart}
+                projectEnd={form.hypercareEnd || form.cutoverDate}
+              />
             </>
           )}
+
+          {/* ── Step 3: Team ── */}
           {step === 3 && (
-            <div className="md:col-span-2">
-              <p className="text-sm text-muted-foreground">Review and submit. The project will be created in Yet to Start status, with DOI initialized at Stage 1.</p>
-              <div className="mt-4 rounded-lg border border-dashed border-border bg-surface p-4 text-sm">
-                Ready to create the new transition. After submission you will be redirected to the project detail page where you can begin DOI tracking.
+            <>
+              <SectionTitle>Team Assignment</SectionTitle>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="Responsible SSC (India)" required>
+                  <SelectInput
+                    value={form.responsibleSSC}
+                    onChange={(v) => set("responsibleSSC", v)}
+                    options={RESPONSIBLE_SSC_MEMBERS}
+                    placeholder="Select member"
+                  />
+                </Field>
+
+                <Field label="Responsible HQ" required>
+                  <SelectInput
+                    value={form.responsibleHQ}
+                    onChange={(v) => set("responsibleHQ", v)}
+                    options={RESPONSIBLE_HQ_MEMBERS}
+                    placeholder="Select member"
+                  />
+                </Field>
               </div>
-            </div>
+            </>
+          )}
+
+          {/* ── Step 4: Review ── */}
+          {step === 4 && (
+            <>
+              <SectionTitle>Review & Confirm</SectionTitle>
+              <ReviewSummary form={form} />
+            </>
           )}
         </div>
-        <div className="flex items-center justify-between border-t border-border bg-surface px-5 py-3">
-          <Button variant="outline" disabled={step === 0} onClick={() => setStep((s) => s - 1)}><ArrowLeft className="h-4 w-4" /> Back</Button>
-          {step < STEPS.length - 1 ? (
-            <Button onClick={() => setStep((s) => s + 1)}>Continue <ArrowRight className="h-4 w-4" /></Button>
+
+        {/* ── Action bar ── */}
+        <div className="flex items-center justify-between border-t border-border bg-surface px-6 py-4">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={prev}
+            disabled={step === 0}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Button>
+
+          {step < 4 ? (
+            <Button size="sm" onClick={next}>
+              Continue
+              <ArrowRight className="h-4 w-4" />
+            </Button>
           ) : (
-            <Button onClick={() => nav({ to: "/projects" })}><Check className="h-4 w-4" /> Create Project</Button>
+            <Button size="sm" onClick={handleCreate}>
+              <Plus className="h-4 w-4" />
+              Create Project
+            </Button>
           )}
         </div>
       </Card>
@@ -85,13 +334,11 @@ function NewProject() {
   );
 }
 
-const INPUT = "h-9 w-full rounded-md border border-border bg-card px-3 text-sm outline-none focus:border-ring focus:ring-2 focus:ring-ring/30";
-
-function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+/* ── Small helper ────────────────────────────────────────────────────────── */
+function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <div className={full ? "md:col-span-2" : ""}>
-      <label className="mb-1.5 block text-xs font-medium">{label}</label>
+    <h3 className="text-sm font-semibold text-foreground pb-1 border-b border-border">
       {children}
-    </div>
+    </h3>
   );
 }
